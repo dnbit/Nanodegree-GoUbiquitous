@@ -5,6 +5,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.res.Resources;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
@@ -71,7 +73,9 @@ public class SunshineWatchFaceService extends CanvasWatchFaceService {
         final Handler mUpdateTimeHandler = new EngineHandler(this);
         boolean mRegisteredTimeZoneReceiver = false;
         Paint mBackgroundPaint;
-        Paint mTextPaint;
+        Paint mTimePaint;
+        Paint mTemperaturePaint;
+        Paint mIconPaint;
         boolean mAmbient;
         Time mTime;
         final BroadcastReceiver mTimeZoneReceiver = new BroadcastReceiver() {
@@ -91,6 +95,7 @@ public class SunshineWatchFaceService extends CanvasWatchFaceService {
          * disable anti-aliasing in ambient mode.
          */
         boolean mLowBitAmbient;
+        private int mLineHeight;
 
         @Override
         public void onCreate(SurfaceHolder holder) {
@@ -108,9 +113,10 @@ public class SunshineWatchFaceService extends CanvasWatchFaceService {
             mBackgroundPaint = new Paint();
             mBackgroundPaint.setColor(resources.getColor(R.color.background));
 
-            mTextPaint = new Paint();
-            mTextPaint = createTextPaint(resources.getColor(R.color.digital_text));
+            mTimePaint = createTextPaint(resources.getColor(R.color.digital_text));
 
+            mTemperaturePaint = createTextPaint(resources.getColor(R.color.digital_text));
+            mIconPaint = createIconPaint();
             mTime = new Time();
         }
 
@@ -124,6 +130,12 @@ public class SunshineWatchFaceService extends CanvasWatchFaceService {
             Paint paint = new Paint();
             paint.setColor(textColor);
             paint.setTypeface(NORMAL_TYPEFACE);
+            paint.setAntiAlias(true);
+            return paint;
+        }
+
+        private Paint createIconPaint() {
+            Paint paint = new Paint();
             paint.setAntiAlias(true);
             return paint;
         }
@@ -176,7 +188,8 @@ public class SunshineWatchFaceService extends CanvasWatchFaceService {
             float textSize = resources.getDimension(isRound
                     ? R.dimen.digital_text_size_round : R.dimen.digital_text_size);
 
-            mTextPaint.setTextSize(textSize);
+            mTimePaint.setTextSize(textSize);
+            mTemperaturePaint.setTextSize(textSize);
         }
 
         @Override
@@ -197,7 +210,8 @@ public class SunshineWatchFaceService extends CanvasWatchFaceService {
             if (mAmbient != inAmbientMode) {
                 mAmbient = inAmbientMode;
                 if (mLowBitAmbient) {
-                    mTextPaint.setAntiAlias(!inAmbientMode);
+                    mTimePaint.setAntiAlias(!inAmbientMode);
+                    mTemperaturePaint.setAntiAlias(!inAmbientMode);
                 }
                 invalidate();
             }
@@ -245,7 +259,13 @@ public class SunshineWatchFaceService extends CanvasWatchFaceService {
             String text = mAmbient
                     ? String.format("%d:%02d", mTime.hour, mTime.minute)
                     : String.format("%d:%02d:%02d", mTime.hour, mTime.minute, mTime.second);
-            canvas.drawText(text, mXOffset, mYOffset, mTextPaint);
+            mLineHeight = 68;
+            int margin = 8;
+            Bitmap icon = BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher);
+            canvas.drawText(text, mXOffset, mYOffset, mTimePaint);
+            canvas.drawBitmap(icon, mXOffset, mYOffset + margin, mIconPaint);
+            canvas.drawText("25º 16º", mXOffset + margin + icon.getWidth(),
+                    mYOffset + mLineHeight, mTemperaturePaint);
         }
 
         /**
