@@ -1,7 +1,14 @@
 package com.example.android.sunshine.app;
 
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.wearable.DataApi;
+import com.google.android.gms.wearable.DataEvent;
 import com.google.android.gms.wearable.DataEventBuffer;
+import com.google.android.gms.wearable.DataItem;
+import com.google.android.gms.wearable.DataMap;
+import com.google.android.gms.wearable.DataMapItem;
+import com.google.android.gms.wearable.Wearable;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -18,9 +25,12 @@ import android.graphics.Typeface;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.support.wearable.watchface.CanvasWatchFaceService;
 import android.support.wearable.watchface.WatchFaceStyle;
 import android.text.format.Time;
+import android.util.Log;
 import android.view.SurfaceHolder;
 import android.view.WindowInsets;
 
@@ -32,7 +42,9 @@ import java.util.concurrent.TimeUnit;
  * Digital watch face with seconds. In ambient mode, the seconds aren't displayed. On devices with
  * low-bit ambient mode, the text is drawn without anti-aliasing in ambient mode.
  */
-public class SunshineWatchFaceService extends CanvasWatchFaceService {
+public class SunshineWatchFaceService extends CanvasWatchFaceService
+        implements DataApi.DataListener, GoogleApiClient.ConnectionCallbacks,
+        GoogleApiClient.OnConnectionFailedListener{
     private static final Typeface NORMAL_TYPEFACE =
             Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL);
 
@@ -46,9 +58,16 @@ public class SunshineWatchFaceService extends CanvasWatchFaceService {
      * Handler message id for updating the time periodically in interactive mode.
      */
     private static final int MSG_UPDATE_TIME = 0;
+    private GoogleApiClient mGoogleApiClient;
 
     @Override
     public Engine onCreateEngine() {
+        mGoogleApiClient = new GoogleApiClient.Builder(this)
+                .addApi(Wearable.API)
+                .addConnectionCallbacks(this)
+                .addOnConnectionFailedListener(this)
+                .build();
+        mGoogleApiClient.connect();
         return new Engine();
     }
 
@@ -72,7 +91,7 @@ public class SunshineWatchFaceService extends CanvasWatchFaceService {
         }
     }
 
-    private class Engine extends CanvasWatchFaceService.Engine implements DataApi.DataListener {
+    private class Engine extends CanvasWatchFaceService.Engine {
         final Handler mUpdateTimeHandler = new EngineHandler(this);
         boolean mRegisteredTimeZoneReceiver = false;
         Paint mBackgroundPaint;
@@ -103,7 +122,6 @@ public class SunshineWatchFaceService extends CanvasWatchFaceService {
         @Override
         public void onCreate(SurfaceHolder holder) {
             super.onCreate(holder);
-
             setWatchFaceStyle(new WatchFaceStyle.Builder(SunshineWatchFaceService.this)
                     .setCardPeekMode(WatchFaceStyle.PEEK_MODE_VARIABLE)
                     .setBackgroundVisibility(WatchFaceStyle.BACKGROUND_VISIBILITY_INTERRUPTIVE)
@@ -303,10 +321,38 @@ public class SunshineWatchFaceService extends CanvasWatchFaceService {
                 mUpdateTimeHandler.sendEmptyMessageDelayed(MSG_UPDATE_TIME, delayMs);
             }
         }
+    }
 
-        @Override
-        public void onDataChanged(DataEventBuffer dataEventBuffer) {
-
+    @Override
+    public void onDataChanged(DataEventBuffer dataEvents) {
+        Log.d("*WatchfaceService", "Data changed");
+        for (DataEvent event : dataEvents) {
+            if (event.getType() == DataEvent.TYPE_CHANGED) {
+                // DataItem changed
+                DataItem item = event.getDataItem();
+                if (item.getUri().getPath().compareTo("/count") == 0) {
+                    DataMap dataMap = DataMapItem.fromDataItem(item).getDataMap();
+//                        updateCount(dataMap.getInt(COUNT_KEY));
+                }
+            } else if (event.getType() == DataEvent.TYPE_DELETED) {
+                // DataItem deleted
+            }
         }
+    }
+
+    @Override
+    public void onConnected(@Nullable Bundle bundle) {
+        Log.d("*watchface", "onConnected");
+        Wearable.DataApi.addListener(mGoogleApiClient, this);
+    }
+
+    @Override
+    public void onConnectionSuspended(int i) {
+        Log.d("*watchface", "onConnectionSuspended");
+    }
+
+    @Override
+    public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {
+        Log.d("*watchface", "onConnectionFailed");
     }
 }
