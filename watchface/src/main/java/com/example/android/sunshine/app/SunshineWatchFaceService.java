@@ -19,7 +19,6 @@ import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
-import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.Typeface;
@@ -32,8 +31,13 @@ import android.support.wearable.watchface.CanvasWatchFaceService;
 import android.support.wearable.watchface.WatchFaceStyle;
 import android.text.format.Time;
 import android.util.Log;
+import android.view.LayoutInflater;
 import android.view.SurfaceHolder;
+import android.view.View;
 import android.view.WindowInsets;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 
 import java.io.InputStream;
 import java.lang.ref.WeakReference;
@@ -60,20 +64,24 @@ public class SunshineWatchFaceService extends CanvasWatchFaceService
      * Handler message id for updating the time periodically in interactive mode.
      */
     private static final int MSG_UPDATE_TIME = 0;
+    private LayoutInflater mInflater;
     private GoogleApiClient mGoogleApiClient;
     private int mHigh;
     private int mLow;
     private Bitmap mIconBitmap;
+    Engine mEngine;
 
     @Override
     public Engine onCreateEngine() {
+        mInflater = (LayoutInflater) this.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
         mGoogleApiClient = new GoogleApiClient.Builder(this)
                 .addApi(Wearable.API)
                 .addConnectionCallbacks(this)
                 .addOnConnectionFailedListener(this)
                 .build();
         mGoogleApiClient.connect();
-        return new Engine();
+        mEngine = new Engine();
+        return mEngine;
     }
 
     private static class EngineHandler extends Handler {
@@ -99,6 +107,7 @@ public class SunshineWatchFaceService extends CanvasWatchFaceService
     private class Engine extends CanvasWatchFaceService.Engine {
         final Handler mUpdateTimeHandler = new EngineHandler(this);
         boolean mRegisteredTimeZoneReceiver = false;
+        private LinearLayout mLayout;
         Paint mBackgroundPaint;
         Paint mTimePaint;
         Paint mTemperaturePaint;
@@ -123,10 +132,17 @@ public class SunshineWatchFaceService extends CanvasWatchFaceService
          */
         boolean mLowBitAmbient;
         private int mLineHeight;
+        private TextView mTimeTextView;
+        private TextView mMinTextView;
+        private TextView mMaxTextView;
+        private ImageView mIconView;
+        private int mBackgroundAmbient;
+        private int mBackgroundFull;
 
         @Override
         public void onCreate(SurfaceHolder holder) {
             super.onCreate(holder);
+            mLayout = (LinearLayout) mInflater.inflate(R.layout.watchface, null);
             setWatchFaceStyle(new WatchFaceStyle.Builder(SunshineWatchFaceService.this)
                     .setCardPeekMode(WatchFaceStyle.PEEK_MODE_VARIABLE)
                     .setBackgroundVisibility(WatchFaceStyle.BACKGROUND_VISIBILITY_INTERRUPTIVE)
@@ -137,13 +153,20 @@ public class SunshineWatchFaceService extends CanvasWatchFaceService
             mYOffset = resources.getDimension(R.dimen.digital_y_offset);
 
             mBackgroundPaint = new Paint();
-            mBackgroundPaint.setColor(resources.getColor(R.color.background));
+            mBackgroundPaint.setColor(resources.getColor(R.color.backgroundAmbient));
 
             mTimePaint = createTextPaint(resources.getColor(R.color.digital_text));
 
             mTemperaturePaint = createTextPaint(resources.getColor(R.color.digital_text));
             mIconPaint = createIconPaint();
             mTime = new Time();
+
+            mTimeTextView = (TextView) mLayout.findViewById(R.id.time);
+            mMinTextView = (TextView) mLayout.findViewById(R.id.min);
+            mMaxTextView = (TextView) mLayout.findViewById(R.id.max);
+            mIconView = (ImageView) mLayout.findViewById(R.id.icon);
+            mBackgroundAmbient = getResources().getColor(R.color.backgroundAmbient);
+            mBackgroundFull = getResources().getColor(R.color.backgroundFull);
         }
 
         @Override
@@ -235,6 +258,7 @@ public class SunshineWatchFaceService extends CanvasWatchFaceService
             super.onAmbientModeChanged(inAmbientMode);
             if (mAmbient != inAmbientMode) {
                 mAmbient = inAmbientMode;
+                mIconView.setVisibility(mAmbient || mIconBitmap == null ? View.GONE : View.VISIBLE);
                 if (mLowBitAmbient) {
                     mTimePaint.setAntiAlias(!inAmbientMode);
                     mTemperaturePaint.setAntiAlias(!inAmbientMode);
@@ -265,7 +289,7 @@ public class SunshineWatchFaceService extends CanvasWatchFaceService
                     // The user has completed the tap gesture.
                     mTapCount++;
                     mBackgroundPaint.setColor(resources.getColor(mTapCount % 2 == 0 ?
-                            R.color.background : R.color.background2));
+                            R.color.backgroundAmbient : R.color.backgroundFull));
                     break;
             }
             invalidate();
@@ -274,26 +298,49 @@ public class SunshineWatchFaceService extends CanvasWatchFaceService
         @Override
         public void onDraw(Canvas canvas, Rect bounds) {
             // Draw the background.
-            if (isInAmbientMode()) {
-                canvas.drawColor(Color.BLACK);
-            } else {
-                canvas.drawRect(0, 0, bounds.width(), bounds.height(), mBackgroundPaint);
-            }
+//            if (isInAmbientMode()) {
+//                canvas.drawColor(Color.BLACK);
+//            } else {
+//                canvas.drawRect(0, 0, bounds.width(), bounds.height(), mBackgroundPaint);
+//            }
 
             // Draw H:MM in ambient mode or H:MM:SS in interactive mode.
             mTime.setToNow();
-            String text = mAmbient
+            String time = mAmbient
                     ? String.format("%d:%02d", mTime.hour, mTime.minute)
                     : String.format("%d:%02d:%02d", mTime.hour, mTime.minute, mTime.second);
-            mLineHeight = 68;
-            int margin = 8;
-            Bitmap icon = BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher);
-            canvas.drawText(text, mXOffset, mYOffset, mTimePaint);
-            if (mIconBitmap != null) {
-                canvas.drawBitmap(mIconBitmap, mXOffset, mYOffset + margin, mIconPaint);
+//            mLineHeight = 68;
+//            int margin = 8;
+//            Bitmap icon = BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher);
+//            canvas.drawText(text, mXOffset, mYOffset, mTimePaint);
+//            if (mIconBitmap != null) {
+//                canvas.drawBitmap(mIconBitmap, mXOffset, mYOffset + margin, mIconPaint);
+//            }
+//            canvas.drawText(mHigh + "º " + mLow + "º", mXOffset + margin + icon.getWidth(),
+//                    mYOffset + mLineHeight, mTemperaturePaint);
+            int widthMeasureSpec = View.MeasureSpec
+                    .makeMeasureSpec(bounds.width(), View.MeasureSpec.EXACTLY);
+            int heightMeasureSpec = View.MeasureSpec
+                    .makeMeasureSpec(bounds.height(), View.MeasureSpec.EXACTLY);
+            mLayout.measure(widthMeasureSpec, heightMeasureSpec);
+            mLayout.layout(0, 0, bounds.width(), bounds.height());
+
+            //            if (isInAmbientMode()) {
+//                canvas.drawColor(Color.BLACK);
+//            } else {
+//                canvas.drawRect(0, 0, bounds.width(), bounds.height(), mBackgroundPaint);
+//            }
+            mLayout.setBackgroundColor(isInAmbientMode() ? mBackgroundAmbient : mBackgroundFull);
+//            mIconView.setVisibility(isInAmbientMode() ? View.GONE : View.VISIBLE);
+
+            mTimeTextView.setText(time);
+            mMaxTextView.setText(String.valueOf(mHigh));
+            mMinTextView.setText(String.valueOf(mLow));
+            if(mIconBitmap != null) {
+                mIconView.setImageBitmap(mIconBitmap);
             }
-            canvas.drawText(mHigh + "º " + mLow + "º", mXOffset + margin + icon.getWidth(),
-                    mYOffset + mLineHeight, mTemperaturePaint);
+
+            mLayout.draw(canvas);
         }
 
         /**
@@ -350,7 +397,7 @@ public class SunshineWatchFaceService extends CanvasWatchFaceService
                             mIconBitmap = loadBitmapFromAsset(asset);
                         }
                     }).start();
-
+                    mEngine.invalidate();
                     Log.d("*WatchfaceService", "MAX: " + mHigh);
                     Log.d("*WatchfaceService", "MIN: " + mLow);
                 }
