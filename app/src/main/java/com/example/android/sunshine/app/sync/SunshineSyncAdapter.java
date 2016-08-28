@@ -506,6 +506,7 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter
     private void updateWear(){
         PutDataMapRequest putDataMapReq = PutDataMapRequest.create("/sunshine");
         putDataMapReq.getDataMap().putInt("max", 31);
+        putDataMapReq.getDataMap().putInt("min", 18);
         PutDataRequest putDataReq = putDataMapReq.asPutDataRequest().setUrgent();
         Wearable.DataApi.putDataItem(mGoogleApiClient, putDataReq)
                 .setResultCallback(new ResultCallback<DataApi.DataItemResult>() {

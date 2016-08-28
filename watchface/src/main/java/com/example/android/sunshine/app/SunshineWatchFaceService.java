@@ -59,6 +59,8 @@ public class SunshineWatchFaceService extends CanvasWatchFaceService
      */
     private static final int MSG_UPDATE_TIME = 0;
     private GoogleApiClient mGoogleApiClient;
+    private int mHigh;
+    private int mLow;
 
     @Override
     public Engine onCreateEngine() {
@@ -285,7 +287,7 @@ public class SunshineWatchFaceService extends CanvasWatchFaceService
             Bitmap icon = BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher);
             canvas.drawText(text, mXOffset, mYOffset, mTimePaint);
             canvas.drawBitmap(icon, mXOffset, mYOffset + margin, mIconPaint);
-            canvas.drawText("25º 16º", mXOffset + margin + icon.getWidth(),
+            canvas.drawText(mHigh + "º " + mLow + "º", mXOffset + margin + icon.getWidth(),
                     mYOffset + mLineHeight, mTemperaturePaint);
         }
 
@@ -330,12 +332,13 @@ public class SunshineWatchFaceService extends CanvasWatchFaceService
             if (event.getType() == DataEvent.TYPE_CHANGED) {
                 // DataItem changed
                 DataItem item = event.getDataItem();
-                if (item.getUri().getPath().compareTo("/count") == 0) {
+                if (item.getUri().getPath().compareTo("/sunshine") == 0) {
                     DataMap dataMap = DataMapItem.fromDataItem(item).getDataMap();
-//                        updateCount(dataMap.getInt(COUNT_KEY));
+                    mHigh = dataMap.getInt("max");
+                    mLow = dataMap.getInt("min");
+                    Log.d("*WatchfaceService", "MAX: " + mHigh);
+                    Log.d("*WatchfaceService", "MIN: " + mLow);
                 }
-            } else if (event.getType() == DataEvent.TYPE_DELETED) {
-                // DataItem deleted
             }
         }
     }
