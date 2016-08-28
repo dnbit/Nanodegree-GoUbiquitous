@@ -2,6 +2,7 @@ package com.example.android.sunshine.app;
 
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.wearable.Asset;
 import com.google.android.gms.wearable.DataApi;
 import com.google.android.gms.wearable.DataEvent;
 import com.google.android.gms.wearable.DataEventBuffer;
@@ -34,6 +35,7 @@ import android.util.Log;
 import android.view.SurfaceHolder;
 import android.view.WindowInsets;
 
+import java.io.InputStream;
 import java.lang.ref.WeakReference;
 import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
@@ -61,6 +63,7 @@ public class SunshineWatchFaceService extends CanvasWatchFaceService
     private GoogleApiClient mGoogleApiClient;
     private int mHigh;
     private int mLow;
+    private Bitmap mIconBitmap;
 
     @Override
     public Engine onCreateEngine() {
@@ -286,7 +289,9 @@ public class SunshineWatchFaceService extends CanvasWatchFaceService
             int margin = 8;
             Bitmap icon = BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher);
             canvas.drawText(text, mXOffset, mYOffset, mTimePaint);
-            canvas.drawBitmap(icon, mXOffset, mYOffset + margin, mIconPaint);
+            if (mIconBitmap != null) {
+                canvas.drawBitmap(mIconBitmap, mXOffset, mYOffset + margin, mIconPaint);
+            }
             canvas.drawText(mHigh + "º " + mLow + "º", mXOffset + margin + icon.getWidth(),
                     mYOffset + mLineHeight, mTemperaturePaint);
         }
@@ -336,12 +341,45 @@ public class SunshineWatchFaceService extends CanvasWatchFaceService
                     DataMap dataMap = DataMapItem.fromDataItem(item).getDataMap();
                     mHigh = dataMap.getInt("max");
                     mLow = dataMap.getInt("min");
+
+                    final Asset asset =  dataMap.getAsset("icon");
+
+                    new Thread(new Runnable() {
+                        @Override
+                        public void run() {
+                            mIconBitmap = loadBitmapFromAsset(asset);
+                        }
+                    }).start();
+
                     Log.d("*WatchfaceService", "MAX: " + mHigh);
                     Log.d("*WatchfaceService", "MIN: " + mLow);
                 }
             }
         }
     }
+
+    public Bitmap loadBitmapFromAsset(Asset asset) {
+        if (asset == null) {
+            throw new IllegalArgumentException("Asset must be non-null");
+        }
+        ConnectionResult result =
+                mGoogleApiClient.blockingConnect(500, TimeUnit.MILLISECONDS);
+        if (!result.isSuccess()) {
+            return null;
+        }
+        // convert asset into a file descriptor and block until it's ready
+        InputStream assetInputStream = Wearable.DataApi.getFdForAsset(
+                mGoogleApiClient, asset).await().getInputStream();
+        mGoogleApiClient.disconnect();
+
+        if (assetInputStream == null) {
+            Log.w("SUNSHINE", "Requested an unknown Asset.");
+            return null;
+        }
+        // decode the stream into a bitmap
+        return BitmapFactory.decodeStream(assetInputStream);
+    }
+
 
     @Override
     public void onConnected(@Nullable Bundle bundle) {

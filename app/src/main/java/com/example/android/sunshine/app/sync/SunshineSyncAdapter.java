@@ -3,6 +3,7 @@ package com.example.android.sunshine.app.sync;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.ResultCallback;
+import com.google.android.gms.wearable.Asset;
 import com.google.android.gms.wearable.DataApi;
 import com.google.android.gms.wearable.PutDataMapRequest;
 import com.google.android.gms.wearable.PutDataRequest;
@@ -52,6 +53,7 @@ import android.text.format.Time;
 import android.util.Log;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -88,6 +90,9 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter
     private static final int INDEX_MIN_TEMP = 2;
     private static final int INDEX_SHORT_DESC = 3;
     private GoogleApiClient mGoogleApiClient;
+    private int mHigh;
+    private int mLow;
+    private int mWeatherId;
 
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({LOCATION_STATUS_OK, LOCATION_STATUS_SERVER_DOWN, LOCATION_STATUS_SERVER_INVALID,  LOCATION_STATUS_UNKNOWN, LOCATION_STATUS_INVALID})
@@ -349,6 +354,13 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter
                 weatherValues.put(WeatherContract.WeatherEntry.COLUMN_WEATHER_ID, weatherId);
 
                 cVVector.add(weatherValues);
+
+                if (i == 0){
+                    // current weather
+                    mHigh = (int) high;
+                    mLow = (int) low;
+                    mWeatherId = Utility.getArtResourceForWeatherCondition(weatherId);
+                }
             }
 
             int inserted = 0;
@@ -505,8 +517,17 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter
 
     private void updateWear(){
         PutDataMapRequest putDataMapReq = PutDataMapRequest.create("/sunshine");
-        putDataMapReq.getDataMap().putInt("max", 31);
-        putDataMapReq.getDataMap().putInt("min", 18);
+        putDataMapReq.getDataMap().putInt("max", mHigh);
+        putDataMapReq.getDataMap().putInt("min", mLow);
+
+        Bitmap bitmap = BitmapFactory.decodeResource(getContext().getResources(), mWeatherId);
+        final ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+        bitmap.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStream);
+        byte[] byteArray = byteArrayOutputStream.toByteArray();
+        Asset iconAsset = Asset.createFromBytes(byteArray);
+
+        putDataMapReq.getDataMap().putAsset("icon", iconAsset);
+
         PutDataRequest putDataReq = putDataMapReq.asPutDataRequest().setUrgent();
         Wearable.DataApi.putDataItem(mGoogleApiClient, putDataReq)
                 .setResultCallback(new ResultCallback<DataApi.DataItemResult>() {
