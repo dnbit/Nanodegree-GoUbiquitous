@@ -15,13 +15,10 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
-import android.graphics.Paint;
 import android.graphics.Rect;
-import android.graphics.Typeface;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
@@ -34,13 +31,13 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.SurfaceHolder;
 import android.view.View;
-import android.view.WindowInsets;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import java.io.InputStream;
 import java.lang.ref.WeakReference;
+import java.util.Locale;
 import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 
@@ -51,8 +48,6 @@ import java.util.concurrent.TimeUnit;
 public class SunshineWatchFaceService extends CanvasWatchFaceService
         implements DataApi.DataListener, GoogleApiClient.ConnectionCallbacks,
         GoogleApiClient.OnConnectionFailedListener {
-    private static final Typeface NORMAL_TYPEFACE =
-            Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL);
 
     /**
      * Update rate in milliseconds for interactive mode. We update once a second since seconds are
@@ -66,10 +61,9 @@ public class SunshineWatchFaceService extends CanvasWatchFaceService
     private static final int MSG_UPDATE_TIME = 0;
     private LayoutInflater mInflater;
     private GoogleApiClient mGoogleApiClient;
-    private int mHigh;
-    private int mLow;
+    private String mHigh;
+    private String mLow;
     private Bitmap mIconBitmap;
-    Engine mEngine;
 
     @Override
     public Engine onCreateEngine() {
@@ -80,8 +74,8 @@ public class SunshineWatchFaceService extends CanvasWatchFaceService
                 .addOnConnectionFailedListener(this)
                 .build();
         mGoogleApiClient.connect();
-        mEngine = new Engine();
-        return mEngine;
+
+        return new Engine();
     }
 
     private static class EngineHandler extends Handler {
@@ -108,9 +102,6 @@ public class SunshineWatchFaceService extends CanvasWatchFaceService
         final Handler mUpdateTimeHandler = new EngineHandler(this);
         boolean mRegisteredTimeZoneReceiver = false;
         private LinearLayout mLayout;
-        Paint mBackgroundPaint;
-        Paint mTimePaint;
-        Paint mTemperaturePaint;
         boolean mAmbient;
         Time mTime;
         final BroadcastReceiver mTimeZoneReceiver = new BroadcastReceiver() {
@@ -122,15 +113,10 @@ public class SunshineWatchFaceService extends CanvasWatchFaceService
         };
         int mTapCount;
 
-        float mXOffset;
-        float mYOffset;
-
         /**
          * Whether the display supports fewer bits for each color in ambient mode. When true, we
          * disable anti-aliasing in ambient mode.
          */
-        boolean mLowBitAmbient;
-        private int mLineHeight;
         private TextView mTimeTextView;
         private TextView mMinTextView;
         private TextView mMaxTextView;
@@ -148,15 +134,7 @@ public class SunshineWatchFaceService extends CanvasWatchFaceService
                     .setShowSystemUiTime(false)
                     .setAcceptsTapEvents(true)
                     .build());
-            Resources resources = SunshineWatchFaceService.this.getResources();
-            mYOffset = resources.getDimension(R.dimen.digital_y_offset);
 
-            mBackgroundPaint = new Paint();
-            mBackgroundPaint.setColor(resources.getColor(R.color.backgroundAmbient));
-
-            mTimePaint = createTextPaint(resources.getColor(R.color.digital_text));
-
-            mTemperaturePaint = createTextPaint(resources.getColor(R.color.digital_text));
             mTime = new Time();
 
             mTimeTextView = (TextView) mLayout.findViewById(R.id.time);
@@ -171,14 +149,6 @@ public class SunshineWatchFaceService extends CanvasWatchFaceService
         public void onDestroy() {
             mUpdateTimeHandler.removeMessages(MSG_UPDATE_TIME);
             super.onDestroy();
-        }
-
-        private Paint createTextPaint(int textColor) {
-            Paint paint = new Paint();
-            paint.setColor(textColor);
-            paint.setTypeface(NORMAL_TYPEFACE);
-            paint.setAntiAlias(true);
-            return paint;
         }
 
         @Override
@@ -218,25 +188,8 @@ public class SunshineWatchFaceService extends CanvasWatchFaceService
         }
 
         @Override
-        public void onApplyWindowInsets(WindowInsets insets) {
-            super.onApplyWindowInsets(insets);
-
-            // Load resources that have alternate values for round watches.
-            Resources resources = SunshineWatchFaceService.this.getResources();
-            boolean isRound = insets.isRound();
-            mXOffset = resources.getDimension(isRound
-                    ? R.dimen.digital_x_offset_round : R.dimen.digital_x_offset);
-            float textSize = resources.getDimension(isRound
-                    ? R.dimen.digital_text_size_round : R.dimen.digital_text_size);
-
-            mTimePaint.setTextSize(textSize);
-            mTemperaturePaint.setTextSize(textSize);
-        }
-
-        @Override
         public void onPropertiesChanged(Bundle properties) {
             super.onPropertiesChanged(properties);
-            mLowBitAmbient = properties.getBoolean(PROPERTY_LOW_BIT_AMBIENT, false);
         }
 
         @Override
@@ -251,10 +204,6 @@ public class SunshineWatchFaceService extends CanvasWatchFaceService
             if (mAmbient != inAmbientMode) {
                 mAmbient = inAmbientMode;
                 mIconView.setVisibility(mAmbient || mIconBitmap == null ? View.GONE : View.VISIBLE);
-                if (mLowBitAmbient) {
-                    mTimePaint.setAntiAlias(!inAmbientMode);
-                    mTemperaturePaint.setAntiAlias(!inAmbientMode);
-                }
                 invalidate();
             }
 
@@ -263,39 +212,16 @@ public class SunshineWatchFaceService extends CanvasWatchFaceService
             updateTimer();
         }
 
-        /**
-         * Captures tap event (and tap type) and toggles the background color if the user finishes
-         * a tap.
-         */
-        @Override
-        public void onTapCommand(int tapType, int x, int y, long eventTime) {
-            Resources resources = SunshineWatchFaceService.this.getResources();
-            switch (tapType) {
-                case TAP_TYPE_TOUCH:
-                    // The user has started touching the screen.
-                    break;
-                case TAP_TYPE_TOUCH_CANCEL:
-                    // The user has started a different gesture or otherwise cancelled the tap.
-                    break;
-                case TAP_TYPE_TAP:
-                    // The user has completed the tap gesture.
-                    mTapCount++;
-                    mBackgroundPaint.setColor(resources.getColor(mTapCount % 2 == 0 ?
-                            R.color.backgroundAmbient : R.color.backgroundFull));
-                    break;
-            }
-            invalidate();
-        }
-
         @Override
         public void onDraw(Canvas canvas, Rect bounds) {
             // Draw H:MM in ambient mode or H:MM:SS in interactive mode.
             mTime.setToNow();
+            Locale currentLocale = getResources().getConfiguration().locale;
             String time = mAmbient
-                    ? String.format("%d:%02d", mTime.hour, mTime.minute)
-                    : String.format("%d:%02d:%02d", mTime.hour, mTime.minute, mTime.second);
+                    ? String.format(currentLocale, "%d:%02d", mTime.hour, mTime.minute)
+                    : String.format(currentLocale, "%d:%02d:%02d", mTime.hour, mTime.minute, mTime.second);
 
-            int widthMeasureSpec = View.MeasureSpec
+            int widthMeasureSpec =  View.MeasureSpec
                     .makeMeasureSpec(bounds.width(), View.MeasureSpec.EXACTLY);
             int heightMeasureSpec = View.MeasureSpec
                     .makeMeasureSpec(bounds.height(), View.MeasureSpec.EXACTLY);
@@ -303,8 +229,8 @@ public class SunshineWatchFaceService extends CanvasWatchFaceService
             mLayout.layout(0, 0, bounds.width(), bounds.height());
 
             mTimeTextView.setText(time);
-            mMaxTextView.setText(String.valueOf(mHigh));
-            mMinTextView.setText(String.valueOf(mLow));
+            mMaxTextView.setText(mHigh);
+            mMinTextView.setText(mLow);
             if (mIconBitmap != null) {
                 mIconView.setImageBitmap(mIconBitmap);
             }
@@ -356,8 +282,8 @@ public class SunshineWatchFaceService extends CanvasWatchFaceService
                 DataItem item = event.getDataItem();
                 if (item.getUri().getPath().compareTo("/sunshine") == 0) {
                     DataMap dataMap = DataMapItem.fromDataItem(item).getDataMap();
-                    mHigh = dataMap.getInt("max");
-                    mLow = dataMap.getInt("min");
+                    mHigh = dataMap.getString("max");
+                    mLow = dataMap.getString("min");
 
                     final Asset asset = dataMap.getAsset("icon");
 

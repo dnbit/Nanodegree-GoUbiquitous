@@ -533,8 +533,8 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter
 
     private void updateWear() {
         PutDataMapRequest putDataMapReq = PutDataMapRequest.create("/sunshine");
-        putDataMapReq.getDataMap().putInt("max", mHigh);
-        putDataMapReq.getDataMap().putInt("min", mLow);
+        putDataMapReq.getDataMap().putString("max", Utility.formatTemperature(getContext(), mHigh));
+        putDataMapReq.getDataMap().putString("min", Utility.formatTemperature(getContext(), mLow));
         putDataMapReq.getDataMap().putAsset("icon", createIconAsset());
 
         PutDataRequest putDataReq = putDataMapReq.asPutDataRequest().setUrgent();
